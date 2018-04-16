@@ -1,36 +1,26 @@
-node {
-    def app
+#!groovy
 
-    stage('Clone repository') {
-        /* Let's make sure we have the repository cloned to our workspace */
-
-        checkout scm
+pipeline {
+  agent none
+    stage('Docker Build') {
+      agent any
+      steps {
+        sh 'docker build -t sredemo/nginx_demo:1.0 .'
+      }
     }
-
-    stage('Build image') {
-        /* This builds the actual image; synonymous to
-         * docker build on the command line */
-
-        app = docker.build("sandeep1983/sredemonginx")
-    }
-
-    stage('Test image') {
-        /* Ideally, we would run a test framework against our image.
-         * For this example, we're using a Volkswagen-type approach ;-) */
-
-        app.inside {
-            sh 'echo "Tests passed"'
+    stage('Docker Push') {
+      agent any
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'docker-hub-credentialsPassword', usernameVariable: 'docker-hub-credentialsUser')]) {
+          sh "docker login -u ${env.docker-hub-credentialsUser} -p ${env.docker-hub-credentialsPassword}"
+          sh 'docker push sredemo/nginx_demo:1.0:1.0'
         }
+      }
     }
-
-    stage('Push image') {
-        /* Finally, we'll push the image with two tags:
-         * First, the incremental build number from Jenkins
-         * Second, the 'latest' tag.
-         * Pushing multiple tags is cheap, as all the layers are reused. */
-        docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-credentials') {
-            app.push("${env.BUILD_NUMBER}")
-            app.push("latest")
-        }
-    }
+    stage('Docker ClearImages') {
+      agent any
+      steps {
+        sh 'docker rmi -f $(docker images -a -q)'
+      }
+    }    
 }
